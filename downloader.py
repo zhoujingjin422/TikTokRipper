@@ -1,0 +1,450 @@
+"""
+YouTube 视频下载器 - 简化为只下载 1080P
+"""
+import os
+import sys
+import subprocess
+import json
+
+# 设置 UTF-8 输出
+if sys.platform == 'win32':
+    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stderr.reconfigure(encoding='utf-8')
+
+
+def get_ffmpeg_path():
+    """获取 FFmpeg 路径"""
+    # 优先使用 video-downloader 项目的 FFmpeg
+    bundled = r"D:\openclaw\workspace\video-downloader\bin\ffmpeg-7.1-essentials_build\bin\ffmpeg.exe"
+    if os.path.exists(bundled):
+        return bundled
+    
+    # 检查系统 PATH
+    for prog in ['ffmpeg', 'ffmpeg.exe']:
+        try:
+            result = subprocess.run([prog, '-version'], capture_output=True, text=True)
+            if result.returncode == 0:
+                return prog
+        except:
+            pass
+    
+    return None
+
+
+def get_video_info(url):
+    """获取视频信息"""
+    print(f"[INFO] 获取视频信息: {url}")
+    
+    cmd = ["yt-dlp", "--dump-json", "--no-download", url, "--no-warnings"]
+    
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        
+        if result.returncode != 0:
+            print(f"[ERROR] {result.stderr}")
+            return None
+        
+        data = json.loads(result.stdout)
+        
+        info = {
+            'title': data.get('title', 'Unknown'),
+            'duration': data.get('duration', 0),
+            'uploader': data.get('uploader', 'Unknown'),
+            'id': data.get('id', ''),
+        }
+        
+        print(f"[INFO] 标题: {info['title']}, 时长: {info['duration']}秒")
+        return info
+        
+    except Exception as e:
+        print(f"[ERROR] {e}")
+        return None
+
+
+def download_video(url, output_dir="downloads", cookie_file=None, max_retries=3, download_subtitle=True):
+    """
+    下载 YouTube 视频 - 固定 1080P
+    
+    Args:
+        url: YouTube URL
+        output_dir: 输出目录
+        cookie_file: Cookie 文件路径
+        max_retries: 最大重试次数
+        download_subtitle: 是否下载字幕
+    
+    Returns:
+        str: 下载的文件路径
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # 获取视频 ID
+    video_id = ""
+    if "v=" in url:
+        video_id = url.split("v=")[1].split("&")[0]
+    safe_title = f"video_{video_id}"
+    output_path = os.path.join(output_dir, f"{safe_title}.mp4")
+    
+    # 字幕输出路径
+    subtitle_path = os.path.join(output_dir, f"{safe_title}.srt")
+    
+    # 保持原格式下载 (不转码，由处理阶段自动转)
+    # format_spec = None 表示使用 yt-dlp 默认的最佳格式
+    format_spec = None
+    
+    # 添加 --merge-output-format mp4 确保输出是 mp4 格式
+    # 这样可以避免 webm 格式导致的问题
+    
+    # FFmpeg 位置
+    ffmpeg_path = get_ffmpeg_path()
+    ffmpeg_dir = os.path.dirname(ffmpeg_path) if ffmpeg_path else None
+    
+    # Cookie
+    use_cookie = cookie_file and os.path.exists(cookie_file)
+    
+    # 跟踪字幕下载状态
+    subtitle_failed = False
+    
+    # 重试下载
+    for attempt in range(1, max_retries + 1):
+        print(f"\n[INFO] 开始下载 (尝试 {attempt}/{max_retries}): {url}")
+        
+        # 如果是重试，删除可能存在的部分文件
+        if attempt > 1 and os.path.exists(output_path):
+            try:
+                os.remove(output_path)
+                print(f"[INFO] 删除上次未完成的文件")
+            except:
+                pass
+        
+        # 构建命令 - 使用更好的进度输出
+        cmd = [
+            'yt-dlp',
+            '--output', output_path,
+            '--progress',
+            '--no-warnings',
+            '--no-playlist',
+            '-c',          # 断点续传
+            '--continue',  # 继续下载部分文件
+            '--newline',   # 换行输出进度
+        ]
+        
+        # 添加格式参数 (保持原格式)
+        if format_spec:
+            cmd.extend(['--format', format_spec])
+        
+        # 字幕下载选项 - 只有在需要且未失败时才添加
+        if download_subtitle and not subtitle_failed:
+            # 下载srt字幕，优先中文，其次英文
+            cmd.extend([
+                '--write-sub',
+                '--write-auto-sub',
+                '--sub-lang', 'zh-CN,zh-Hans,zh-Hant,en',
+                '--sub-format', 'srt',
+                '--convert-subs', 'srt',
+                '--embed-subs',  # 烧录字幕到视频
+            ])
+        
+        # FFmpeg 位置
+        if ffmpeg_dir:
+            cmd.extend(['--ffmpeg-location', ffmpeg_dir])
+        
+        # Cookie
+        if use_cookie:
+            cmd.extend(['--cookies', cookie_file])
+            print(f"[INFO] 使用 Cookie")
+        
+        # 合并输出为 mp4 格式（避免 webm 格式问题）
+        cmd.extend(['--merge-output-format', 'mp4'])
+        
+        # 其他选项
+        cmd.append('--no-check-certificates')
+        cmd.append(url)
+        
+        print(f"[CMD] yt-dlp ...")
+        
+        try:
+            # 超时 30 分钟 (大视频可能需要更久)
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
+            
+            # 打印输出（包含进度信息）
+            if result.stdout:
+                for line in result.stdout.split('\n'):
+                    # 过滤掉冗余信息，只保留进度
+                    if '%' in line or 'Downloading' in line or ' ETA' in line or 'M' in line or 'K' in line:
+                        print(line)
+            
+            if result.returncode != 0:
+                error_msg = result.stderr
+                print(f"[ERROR] 下载失败: {error_msg}")
+                
+                # 检测字幕下载失败错误 (HTTP 429)
+                if 'subtitles' in error_msg.lower() and ('429' in error_msg or 'too many requests' in error_msg.lower()):
+                    print("[WARN] 字幕下载被限流 (429)，跳过字幕下载重试...")
+                    subtitle_failed = True
+                    # 立即重试，不等待
+                    continue
+                
+                # 如果是账户/权限问题，不再重试
+                if 'HTTP Error 403' in error_msg or 'Login required' in error_msg:
+                    print("[ERROR] Cookie 可能已失效，请更新 Cookie")
+                    return None
+                
+                # 继续重试
+                if attempt < max_retries:
+                    wait_time = attempt * 30
+                    print(f"[INFO] {wait_time}秒后重试...")
+                    import time
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    return None
+            
+            # 检查输出文件
+            if os.path.exists(output_path):
+                size = os.path.getsize(output_path) / (1024*1024)
+                print(f"[SUCCESS] 下载完成: {size:.1f} MB")
+            
+            # 检查字幕文件 (下载了独立字幕文件)
+            if download_subtitle and not subtitle_failed:
+                # 查找下载的字幕文件
+                subtitle_found = None
+                for f in os.listdir(output_dir):
+                    if f.startswith(safe_title) and f.endswith('.srt'):
+                        subtitle_found = os.path.join(output_dir, f)
+                        break
+                
+                if subtitle_found:
+                    # 重命名为标准名称
+                    if subtitle_found != subtitle_path:
+                        try:
+                            import shutil
+                            shutil.move(subtitle_found, subtitle_path)
+                            print(f"[INFO] 字幕文件: {os.path.basename(subtitle_path)}")
+                        except:
+                            print(f"[INFO] 字幕文件: {os.path.basename(subtitle_found)}")
+                else:
+                    print("[INFO] 字幕已烧录到视频中")
+            elif subtitle_failed:
+                print("[INFO] 已跳过字幕下载")
+            
+            # 检查输出文件
+            if os.path.exists(output_path):
+                size = os.path.getsize(output_path) / (1024*1024)
+                print(f"[SUCCESS] 下载完成: {size:.1f} MB")
+                return output_path
+            
+            # 如果指定的 mp4 不存在，尝试找其他格式
+            for f in os.listdir(output_dir):
+                if video_id in f and f.endswith(('.mp4', '.webm', '.mkv', '.flv')):
+                    filepath = os.path.join(output_dir, f)
+                    size = os.path.getsize(filepath) / (1024*1024)
+                    print(f"[SUCCESS] 下载完成: {size:.1f} MB")
+                    # 重命名为 mp4（如果需要）
+                    if not filepath.endswith('.mp4'):
+                        new_path = filepath.rsplit('.', 1)[0] + '.mp4'
+                        try:
+                            import shutil
+                            shutil.move(filepath, new_path)
+                            print(f"[INFO] 转换为 mp4 格式")
+                            return new_path
+                        except:
+                            return filepath
+                    return filepath
+            
+            print(f"[WARN] 输出文件不存在")
+            return None
+                    
+        except subprocess.TimeoutExpired:
+            print(f"[ERROR] 下载超时 (30分钟)，尝试 {attempt + 1}/{max_retries}")
+            if attempt < max_retries:
+                import time
+                time.sleep(30)
+                continue
+        except Exception as e:
+            print(f"[ERROR] 下载异常: {e}")
+            if attempt < max_retries:
+                import time
+                time.sleep(30)
+                continue
+    
+    return None
+
+
+def get_video_size_estimate(url, cookie_file=None):
+    """
+    获取视频大小估算 (在下载前)
+    """
+    cmd = [
+        'yt-dlp',
+        '--format', '(bestvideo[height>=1080]/bestvideo[height>=720])+bestaudio[ext=m4a]/bestaudio/best',
+        '--print', '%(filesize,filesize_approx)s',
+        '--no-download',
+        '--no-warnings',
+    ]
+    
+    if cookie_file and os.path.exists(cookie_file):
+        cmd.extend(['--cookies', cookie_file])
+    
+    cmd.append(url)
+    
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        if result.returncode == 0 and result.stdout.strip():
+            size_bytes = int(result.stdout.strip())
+            if size_bytes > 0:
+                size_mb = size_bytes / (1024 * 1024)
+                return size_mb
+    except:
+        pass
+    
+    return None
+
+
+def download_playlist(url, output_dir="downloads", limit=10, cookie_file=None):
+    """
+    下载 YouTube 播放列表
+    
+    Args:
+        url: YouTube 播放列表 URL
+        output_dir: 输出目录
+        limit: 最大下载数量
+        cookie_file: Cookie 文件路径
+    
+    Returns:
+        list: 下载成功的文件路径列表
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    
+    print(f"[INFO] 开始下载播放列表...")
+    print(f"[INFO] URL: {url}")
+    print(f"[INFO] 最大数量: {limit}")
+    
+    # Cookie
+    use_cookie = cookie_file and os.path.exists(cookie_file)
+    
+    # 先获取播放列表信息 - 使用更可靠的方法
+    print("[INFO] 获取播放列表信息...")
+    
+    list_cmd = [
+        'yt-dlp',
+        '--flat-playlist',
+        '--print', '%(id)s|%(title)s',
+        '--no-warnings',
+        '--playlist-end', str(limit) if limit else '100',
+    ]
+    
+    if use_cookie:
+        list_cmd.extend(['--cookies', cookie_file])
+    
+    list_cmd.append(url)
+    
+    try:
+        result = subprocess.run(list_cmd, capture_output=True, text=True, timeout=120, encoding='utf-8', errors='ignore')
+        
+        if result.returncode != 0:
+            print(f"[ERROR] 获取播放列表失败: {result.stderr}")
+            return []
+        
+        # 解析视频列表
+        videos = []
+        for line in result.stdout.strip().split('\n'):
+            line = line.strip()
+            if '|' in line:
+                parts = line.split('|', 1)
+                if len(parts) == 2:
+                    videos.append({
+                        'id': parts[0].strip(),
+                        'title': parts[1].strip()
+                    })
+        
+        if not videos:
+            print("[ERROR] 未找到播放列表中的视频")
+            return []
+        
+        print(f"[INFO] 播放列表共有 {len(videos)} 个视频")
+        
+        # 限制数量
+        if limit and limit > 0:
+            videos = videos[:limit]
+        
+        print(f"[INFO] 将下载前 {len(videos)} 个视频")
+        
+    except Exception as e:
+        print(f"[ERROR] 获取播放列表失败: {e}")
+        return []
+    
+    # 下载每个视频
+    downloaded = []
+    failed = []
+    skipped = []
+    
+    for i, video in enumerate(videos, 1):
+        video_url = f"https://www.youtube.com/watch?v={video['id']}"
+        print(f"\n[{i}/{len(videos)}] 准备下载: {video['title'][:50]}...")
+        
+        # 使用与单视频下载相同的方式
+        filepath = download_video(
+            url=video_url,
+            output_dir=output_dir,
+            cookie_file=cookie_file,
+            max_retries=1,  # 播放列表中减少重试次数，加快速度
+            download_subtitle=False
+        )
+        
+        if filepath and os.path.exists(filepath):
+            downloaded.append(filepath)
+            print(f"   ✅ 下载成功: {os.path.basename(filepath)}")
+        elif os.path.exists(os.path.join(output_dir, f"video_{video['id']}.mp4")):
+            # 文件已存在（可能是之前下载的）
+            filepath = os.path.join(output_dir, f"video_{video['id']}.mp4")
+            downloaded.append(filepath)
+            print(f"   ✅ 文件已存在: {os.path.basename(filepath)}")
+        else:
+            # 检查是否是可跳过的错误（地区限制、私有视频等）
+            print(f"   ⚠️ 跳过该视频（可能地区限制或私有）")
+            skipped.append(video['title'])
+    
+    # 总结
+    print(f"\n{'='*50}")
+    print(f"下载完成!")
+    print(f"   成功: {len(downloaded)} 个")
+    print(f"   跳过: {len(skipped)} 个")
+    
+    if skipped:
+        print(f"\n跳过的视频:")
+        for title in skipped[:10]:  # 最多显示10个
+            print(f"   - {title[:60]}")
+        if len(skipped) > 10:
+            print(f"   ... 还有 {len(skipped) - 10} 个")
+    
+    return downloaded
+
+
+def search_youtube(query, max_results=10):
+    """搜索 YouTube"""
+    cmd = ["yt-dlp", "--dump-json", "--no-download", "--playlist-end", str(max_results), f"ytsearch{max_results}:{query}"]
+    
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        
+        if result.returncode != 0:
+            return []
+        
+        videos = []
+        for line in result.stdout.strip().split('\n'):
+            if line:
+                try:
+                    data = json.loads(line)
+                    videos.append({
+                        'id': data.get('id', ''),
+                        'title': data.get('title', ''),
+                        'duration': data.get('duration', 0),
+                        'url': f"https://www.youtube.com/watch?v={data.get('id', '')}"
+                    })
+                except:
+                    pass
+        
+        return videos
+        
+    except:
+        return []
