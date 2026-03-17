@@ -5,6 +5,7 @@ import os
 import sys
 import subprocess
 import json
+from config import YOUTUBE_PROXY, YOUTUBE_USE_EJS, YOUTUBE_JS_RUNTIME
 
 # 设置 UTF-8 输出
 if sys.platform == 'win32':
@@ -36,6 +37,18 @@ def get_video_info(url):
     print(f"[INFO] 获取视频信息: {url}")
     
     cmd = ["yt-dlp", "--dump-json", "--no-download", url, "--no-warnings"]
+    
+    # 添加代理
+    if YOUTUBE_PROXY:
+        cmd.extend(['--proxy', YOUTUBE_PROXY])
+    
+    # 远程组件 (EJS)
+    if YOUTUBE_USE_EJS:
+        cmd.extend(['--remote-components', 'ejs:github'])
+    
+    # JavaScript 运行时
+    if YOUTUBE_JS_RUNTIME:
+        cmd.extend(['--js-runtimes', YOUTUBE_JS_RUNTIME])
     
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
@@ -152,6 +165,19 @@ def download_video(url, output_dir="downloads", cookie_file=None, max_retries=3,
         if use_cookie:
             cmd.extend(['--cookies', cookie_file])
             print(f"[INFO] 使用 Cookie")
+        
+        # 代理
+        if YOUTUBE_PROXY:
+            cmd.extend(['--proxy', YOUTUBE_PROXY])
+            print(f"[INFO] 使用代理: {YOUTUBE_PROXY}")
+        
+        # 远程组件 (EJS) - 绕过JS验证
+        if YOUTUBE_USE_EJS:
+            cmd.extend(['--remote-components', 'ejs:github'])
+        
+        # JavaScript 运行时
+        if YOUTUBE_JS_RUNTIME:
+            cmd.extend(['--js-runtimes', YOUTUBE_JS_RUNTIME])
         
         # 合并输出为 mp4 格式（避免 webm 格式问题）
         cmd.extend(['--merge-output-format', 'mp4'])
@@ -285,6 +311,15 @@ def get_video_size_estimate(url, cookie_file=None):
     if cookie_file and os.path.exists(cookie_file):
         cmd.extend(['--cookies', cookie_file])
     
+    if YOUTUBE_PROXY:
+        cmd.extend(['--proxy', YOUTUBE_PROXY])
+    
+    if YOUTUBE_USE_EJS:
+        cmd.extend(['--remote-components', 'ejs:github'])
+    
+    if YOUTUBE_JS_RUNTIME:
+        cmd.extend(['--js-runtimes', YOUTUBE_JS_RUNTIME])
+    
     cmd.append(url)
     
     try:
@@ -335,6 +370,15 @@ def download_playlist(url, output_dir="downloads", limit=10, cookie_file=None):
     
     if use_cookie:
         list_cmd.extend(['--cookies', cookie_file])
+    
+    if YOUTUBE_PROXY:
+        list_cmd.extend(['--proxy', YOUTUBE_PROXY])
+    
+    if YOUTUBE_USE_EJS:
+        list_cmd.extend(['--remote-components', 'ejs:github'])
+    
+    if YOUTUBE_JS_RUNTIME:
+        list_cmd.extend(['--js-runtimes', YOUTUBE_JS_RUNTIME])
     
     list_cmd.append(url)
     
@@ -423,6 +467,15 @@ def download_playlist(url, output_dir="downloads", limit=10, cookie_file=None):
 def search_youtube(query, max_results=10):
     """搜索 YouTube"""
     cmd = ["yt-dlp", "--dump-json", "--no-download", "--playlist-end", str(max_results), f"ytsearch{max_results}:{query}"]
+    
+    if YOUTUBE_PROXY:
+        cmd.extend(['--proxy', YOUTUBE_PROXY])
+    
+    if YOUTUBE_USE_EJS:
+        cmd.extend(['--remote-components', 'ejs:github'])
+    
+    if YOUTUBE_JS_RUNTIME:
+        cmd.extend(['--js-runtimes', YOUTUBE_JS_RUNTIME])
     
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)

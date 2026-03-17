@@ -5,6 +5,7 @@ TikTok Ripper - YouTube 视频搬运工具
 import os
 import sys
 import argparse
+import math
 from pathlib import Path
 
 # 添加当前目录到路径
@@ -15,6 +16,15 @@ import processor
 import auto_subtitle
 import ai_generator
 import config
+
+# 尝试导入翻译模块，如果失败则禁用翻译功能
+try:
+    import translate_srt
+    TRANSLATE_SRT_AVAILABLE = True
+except ImportError as e:
+    print(f"⚠️ 翻译模块不可用: {e}")
+    print("   请运行: pip install deep-translator")
+    TRANSLATE_SRT_AVAILABLE = False
 
 
 def print_banner():
@@ -43,6 +53,7 @@ def menu():
         print("7. 🎬 自动字幕 (Whisper)")
         print("8. ✨ AI 生成标题/描述")
         print("9. ⚙️  查看/修改配置")
+        print("10. 📝 翻译字幕 (英译中 -> 中英双语)")
         print("0. ❌ 退出")
         print("="*50)
         
@@ -66,6 +77,8 @@ def menu():
             ai_generate_menu()
         elif choice == "9":
             show_config()
+        elif choice == "10":
+            translate_subtitle_menu()
         elif choice == "0":
             print("👋 再见!")
             break
@@ -225,7 +238,30 @@ def slice_video():
             # 获取视频信息
             info = processor.get_video_info(input_file)
             if info:
-                print(f"视频时长: {info['duration']}秒")
+                duration = info['duration']
+                print(f"视频时长: {duration}秒")
+                
+                # 计算推荐的切片数量
+                if duration <= 45:
+                    recommended = 1
+                elif duration <= 90:
+                    recommended = 2
+                elif duration <= 135:
+                    recommended = 3
+                else:
+                    recommended = max(math.ceil(duration / 40), 1)
+                
+                print(f"推荐切片: {recommended} 段 (每段约 {duration/recommended:.1f} 秒)")
+            
+            # 询问切片数量
+            num_clips_input = input("\n输入切片数量 (直接回车使用自动计算): ").strip()
+            num_clips = None
+            if num_clips_input:
+                try:
+                    num_clips = int(num_clips_input)
+                    print(f"将视频切成 {num_clips} 段")
+                except ValueError:
+                    print("无效输入，将使用自动计算")
             
             # 切片
             clips = processor.auto_slice_video(
@@ -234,7 +270,8 @@ def slice_video():
                 min_duration=config.TIKTOK_MIN_DURATION,
                 max_duration=config.TIKTOK_MAX_DURATION,
                 target_width=config.TIKTOK_WIDTH,
-                target_height=config.TIKTOK_HEIGHT
+                target_height=config.TIKTOK_HEIGHT,
+                num_clips=num_clips
             )
             
             if clips:
@@ -426,17 +463,54 @@ def auto_subtitle_menu():
                     print(f"\n✅ 字幕生成完成: {srt_file}")
                     
             elif op == "2":
-                # 烧录字幕
-                # 先找已有的字幕文件
-                srt_file = input_file.replace('.mp4', '.srt').replace('.webm', '.srt')
-                if not os.path.exists(srt_file):
-                    print("❌ 未找到字幕文件，请先生成字幕")
+                # 烧录字幕 - 让用户选择字幕文件
+                print("\n请选择字幕文件:")
+                
+                # 搜索可能的字幕文件位置
+                search_dirs = [config.DOWNLOAD_DIR, config.OUTPUT_DIR, "."]
+                srt_files = []
+                
+                for d in search_dirs:
+                    if os.path.exists(d):
+                        for f in os.listdir(d):
+                            if f.endswith('.srt'):
+                                srt_files.append(os.path.join(d, f))
+                
+                if not srt_files:
+                    print("❌ 未找到任何 .srt 字幕文件，请先生成字幕")
                     return
                 
-                output_file = input_file.replace('.mp4', '_subtitled.mp4')
-                result = auto_subtitle.burn_subtitles(input_file, srt_file, output_file)
-                if result:
-                    print(f"\n✅ 字幕烧录完成: {result}")
+                print("可用字幕文件:")
+                for i, s in enumerate(srt_files):
+                    print(f"{i+1}. {os.path.basename(s)}")
+                
+                print(f"{len(srt_files)+1}. 🔍 自定义路径 (手动输入)")
+                
+                try:
+                    srt_idx = int(input("\n选择字幕文件编号: "))
+                    if 1 <= srt_idx <= len(srt_files):
+                        srt_file = srt_files[srt_idx - 1]
+                    elif srt_idx == len(srt_files) + 1:
+                        # 自定义路径
+                        custom_path = input("输入字幕文件完整路径: ").strip().strip('"')
+                        if os.path.exists(custom_path) and custom_path.endswith('.srt'):
+                            srt_file = custom_path
+                        else:
+                            print("❌ 文件不存在或不是 SRT 文件")
+                            return
+                    else:
+                        print("❌ 无效选择")
+                        return
+                    
+                    print(f"已选择字幕: {os.path.basename(srt_file)}")
+                    
+                    output_file = input_file.replace('.mp4', '_subtitled.mp4')
+                    result = auto_subtitle.burn_subtitles(input_file, srt_file, output_file)
+                    if result:
+                        print(f"\n✅ 字幕烧录完成: {result}")
+                except ValueError:
+                    print("❌ 无效选择")
+                    return
                     
             elif op == "3":
                 # 一步到位 - 支持中英双字幕
@@ -553,6 +627,80 @@ def show_config():
     print("- 抖音竖版: 1080x1920")
     print("- 抖音横版: 1920x1080")
     print("- 画质可选: 2160p, 1080p, 720p, 480p")
+
+
+def translate_subtitle_menu():
+    """翻译字幕 - 英译中生成中英双语字幕"""
+    if not TRANSLATE_SRT_AVAILABLE:
+        print("\n❌ 翻译功能不可用")
+        print("   请先安装依赖: pip install deep-translator")
+        return
+    
+    print("\n--- 📝 翻译字幕 (英译中 -> 中英双语) ---")
+    
+    # 搜索字幕文件
+    search_dirs = [config.DOWNLOAD_DIR, config.OUTPUT_DIR, "."]
+    srt_files = []
+    
+    for d in search_dirs:
+        if os.path.exists(d):
+            for f in os.listdir(d):
+                if f.endswith('.srt'):
+                    srt_files.append(os.path.join(d, f))
+    
+    if not srt_files:
+        print("❌ 未找到任何 .srt 字幕文件")
+        return
+    
+    print("可用字幕文件:")
+    for i, s in enumerate(srt_files):
+        print(f"{i+1}. {os.path.basename(s)}")
+    
+    print(f"{len(srt_files)+1}. 🔍 自定义路径 (手动输入)")
+    
+    try:
+        srt_idx = int(input("\n选择要翻译的字幕文件编号: "))
+        if 1 <= srt_idx <= len(srt_files):
+            input_srt = srt_files[srt_idx - 1]
+        elif srt_idx == len(srt_files) + 1:
+            custom_path = input("输入字幕文件完整路径: ").strip().strip('"')
+            if os.path.exists(custom_path) and custom_path.endswith('.srt'):
+                input_srt = custom_path
+            else:
+                print("❌ 文件不存在或不是 SRT 文件")
+                return
+        else:
+            print("❌ 无效选择")
+            return
+        
+        print(f"\n已选择: {os.path.basename(input_srt)}")
+        
+        # 解析字幕
+        print("解析字幕文件...")
+        subtitles = translate_srt.parse_srt(input_srt)
+        print(f"共 {len(subtitles)} 条字幕")
+        
+        # 生成输出路径
+        output_srt = input_srt.replace('.srt', '_bilingual.srt')
+        
+        # 确认覆盖
+        if os.path.exists(output_srt):
+            confirm = input(f"输出文件已存在: {os.path.basename(output_srt)}，是否覆盖? (y/n): ").strip().lower()
+            if confirm != 'y':
+                print("已取消")
+                return
+        
+        # 开始翻译
+        print("\n开始翻译...")
+        print("(每10条暂停1秒，避免API限流)")
+        
+        count = translate_srt.create_bilingual_srt(subtitles, output_srt)
+        
+        print(f"\n✅ 翻译完成! 双语字幕已保存: {output_srt}")
+        print(f"   共处理 {count} 条字幕")
+        
+    except ValueError:
+        print("❌ 无效选择")
 
 
 def main():

@@ -8,6 +8,9 @@ TEMP_DIR = "temp"                # 临时文件目录
 ## YouTube 配置
 YOUTUBE_QUALITY = "1080P"        # 固定 1080P
 COOKIE_FILE = None               # Cookie 文件路径 (可选，如: "cookies.txt")
+YOUTUBE_PROXY = "http://127.0.0.1:7897"  # 代理地址
+YOUTUBE_USE_EJS = True           # 使用远程组件绕过JS验证
+YOUTUBE_JS_RUNTIME = "node:node" # JavaScript 运行时
 
 ## TikTok/抖音 配置
 TIKTOK_DURATION = 40            # 切片时长 (秒)

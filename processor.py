@@ -383,7 +383,8 @@ def crop_video(input_file, width, height, output_file=None):
 
 def auto_slice_video(input_file, output_dir="output", 
                      min_duration=15, max_duration=60,
-                     target_width=1080, target_height=1920):
+                     target_width=1080, target_height=1920,
+                     num_clips=None):
     """
     自动切片视频
     
@@ -394,6 +395,7 @@ def auto_slice_video(input_file, output_dir="output",
         max_duration: 最大片段时长
         target_width: 目标宽度 (如果是 0 表示自动检测)
         target_height: 目标高度
+        num_clips: 指定切片数量 (可选, None 表示自动计算)
     
     Returns:
         list: 生成的片段文件列表
@@ -443,7 +445,12 @@ def auto_slice_video(input_file, output_dir="output",
     # 切片策略 - 适配抖音最佳30-45秒
     target_clip_duration = 40  # 目标片段40秒
     
-    if duration <= 45:
+    if num_clips is not None:
+        # 用户指定了切片数量
+        num_clips = max(1, int(num_clips))
+        base_clip_duration = duration / num_clips
+        print(f"[INFO] 用户指定切片: {num_clips} 段")
+    elif duration <= 45:
         # 45秒以内：不切
         print(f"[INFO] 视频时长 {duration}秒 <= 45秒，不切片")
         num_clips = 1
