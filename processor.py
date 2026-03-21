@@ -432,15 +432,15 @@ def auto_slice_video(input_file, output_dir="output",
     os.makedirs(task_dir, exist_ok=True)
     print(f"[INFO] 输出目录: {task_dir}")
     
-    # 检查并转换编码
-    if info['video_codec'] not in ['h264', 'avc']:
-        print(f"[INFO] 视频编码: {info['video_codec']}，需要转换为 H264")
-        temp_file = convert_to_h264(input_file)
-        if temp_file:
-            input_file = temp_file
-        else:
-            print("[ERROR] 编码转换失败")
-            return []
+    # 检查并转换编码 - 已禁用 H264 判断
+    # if info['video_codec'] not in ['h264', 'avc']:
+    #     print(f"[INFO] 视频编码: {info['video_codec']}，需要转换为 H264")
+    #     temp_file = convert_to_h264(input_file)
+    #     if temp_file:
+    #         input_file = temp_file
+    #     else:
+    #         print("[ERROR] 编码转换失败")
+    #         return []
     
     # 切片策略 - 适配抖音最佳30-45秒
     target_clip_duration = 40  # 目标片段40秒
@@ -481,17 +481,20 @@ def auto_slice_video(input_file, output_dir="output",
         if remaining_time <= 0:
             break
         
-        # 最后一段
-        if i == num_clips - 1:
+        # 计算剩余片段数
+        remaining_clips = num_clips - i
+        
+        # 最后一段取剩余时间，其他片段平均分配
+        if remaining_clips == 1:
             clip_duration = remaining_time
         else:
-            clip_duration = base_clip_duration
+            # 平均分配剩余时间给剩余片段
+            clip_duration = remaining_time / remaining_clips
         
-        # 如果剩余时间超过允许的最大时长，调整
-        if clip_duration > max_duration:
-            # 重新计算需要的片段数和时长
-            remaining_clips = num_clips - i
-            clip_duration = min(max_duration, remaining_time // remaining_clips)
+        # 如果计算出的片段时长超过最大时长限制（仅自动切片时生效）
+        if clip_duration > max_duration and num_clips is None:
+            # 按最大时长限制来分配
+            clip_duration = max_duration
         
         # 生成输出文件名
         filename = os.path.basename(input_file)
@@ -577,12 +580,12 @@ def process_video(input_file, output_dir="output",
     
     current_file = input_file
     
-    # 2. 转换编码
-    if info['video_codec'] not in ['h264', 'avc']:
-        print(f"[STEP 1] 转换编码: {info['video_codec']} -> H264")
-        converted = convert_to_h264(current_file)
-        if converted:
-            current_file = converted
+    # 2. 转换编码 - 已禁用 H264 判断
+    # if info['video_codec'] not in ['h264', 'avc']:
+    #     print(f"[STEP 1] 转换编码: {info['video_codec']} -> H264")
+    #     converted = convert_to_h264(current_file)
+    #     if converted:
+    #         current_file = converted
     
     # 3. 去重 - 调速
     if change_speed_dedup:

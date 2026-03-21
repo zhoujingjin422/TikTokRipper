@@ -54,6 +54,7 @@ def menu():
         print("8. ✨ AI 生成标题/描述")
         print("9. ⚙️  查看/修改配置")
         print("10. 📝 翻译字幕 (英译中 -> 中英双语)")
+        print("11. 📥 下载 YouTube 字幕")
         print("0. ❌ 退出")
         print("="*50)
         
@@ -79,6 +80,8 @@ def menu():
             show_config()
         elif choice == "10":
             translate_subtitle_menu()
+        elif choice == "11":
+            download_subtitle_only()
         elif choice == "0":
             print("👋 再见!")
             break
@@ -131,8 +134,15 @@ def download_single():
         print("❌ URL 不能为空")
         return
     
+    # Cookie
+    cookie_file = None
+    if hasattr(config, 'COOKIE_FILE') and config.COOKIE_FILE:
+        cookie_path = config.COOKIE_FILE
+        if os.path.exists(cookie_path):
+            cookie_file = cookie_path
+    
     # 获取视频信息
-    info = downloader.get_video_info(url)
+    info = downloader.get_video_info(url, cookie_file=cookie_file)
     if not info:
         print("❌ 无法获取视频信息")
         return
@@ -141,23 +151,34 @@ def download_single():
     print(f"   时长: {info['duration']}秒")
     
     # 估算视频大小
-    est_size = downloader.get_video_size_estimate(url, cookie_file=None)
+    est_size = downloader.get_video_size_estimate(url, cookie_file=cookie_file)
     if est_size:
         print(f"   预估大小: ~{est_size:.1f} MB")
     
-    # Cookie
-    cookie_file = None
-    if hasattr(config, 'COOKIE_FILE') and config.COOKIE_FILE:
-        cookie_path = config.COOKIE_FILE
-        if os.path.exists(cookie_path):
-            cookie_file = cookie_path
+    # 选择清晰度
+    print("\n请选择视频清晰度:")
+    print("1. 🔥 1080P (高清)")
+    print("2. 📱 720P (流畅)")
+    print("3. ⭐ 默认 (最佳质量)")
+    
+    quality_choice = input("选择 (1/2/3，默认3): ").strip()
+    if quality_choice == "1":
+        quality = "1080p"
+    elif quality_choice == "2":
+        quality = "720p"
+    else:
+        quality = None
+    
+    if quality:
+        print(f"   已选择: {quality}")
     
     # 下载
     print("\n开始下载...")
     filepath = downloader.download_video(
         url, 
         config.DOWNLOAD_DIR,
-        cookie_file
+        cookie_file,
+        quality=quality
     )
     
     if filepath:
@@ -179,6 +200,44 @@ def download_single():
                 print(f"✅ 处理完成: {output}")
 
 
+def download_subtitle_only():
+    """单独下载字幕"""
+    print("\n--- 📥 下载 YouTube 字幕 ---")
+    url = input("输入 YouTube URL: ").strip()
+    
+    if not url:
+        print("❌ URL 不能为空")
+        return
+    
+    # Cookie
+    cookie_file = None
+    if hasattr(config, 'COOKIE_FILE') and config.COOKIE_FILE:
+        cookie_path = config.COOKIE_FILE
+        if os.path.exists(cookie_path):
+            cookie_file = cookie_path
+    
+    # 获取视频信息
+    info = downloader.get_video_info(url, cookie_file=cookie_file)
+    if info:
+        print(f"   标题: {info['title']}")
+        print(f"   时长: {info['duration']}秒")
+    
+    # 单独下载字幕
+    print("\n开始下载字幕...")
+    subtitle_path = downloader.download_subtitles_only(
+        url, 
+        config.DOWNLOAD_DIR,
+        cookie_file,
+        max_retries=3
+    )
+    
+    if subtitle_path:
+        print(f"\n✅ 字幕下载完成!")
+        print(f"   文件: {subtitle_path}")
+    else:
+        print("❌ 字幕下载失败")
+
+
 def download_playlist():
     """下载播放列表"""
     print("\n--- 下载播放列表 ---")
@@ -191,6 +250,20 @@ def download_playlist():
     limit = input("最大下载数量 (默认10): ").strip()
     limit = int(limit) if limit.isdigit() else 10
     
+    # 选择清晰度
+    print("\n请选择视频清晰度:")
+    print("1. 🔥 1080P (高清)")
+    print("2. 📱 720P (流畅)")
+    print("3. ⭐ 默认 (最佳质量)")
+    
+    quality_choice = input("选择 (1/2/3，默认3): ").strip()
+    if quality_choice == "1":
+        quality = "1080p"
+    elif quality_choice == "2":
+        quality = "720p"
+    else:
+        quality = None
+    
     # Cookie
     cookie_file = None
     if hasattr(config, 'COOKIE_FILE') and config.COOKIE_FILE:
@@ -202,7 +275,8 @@ def download_playlist():
         url,
         config.DOWNLOAD_DIR,
         limit,
-        cookie_file
+        cookie_file,
+        quality
     )
     
     if videos:
@@ -332,31 +406,51 @@ def one_click_rip():
         print("❌ URL 不能为空")
         return
     
-    # 获取视频信息
-    info = downloader.get_video_info(url)
-    if info:
-        print(f"   标题: {info['title']}")
-        print(f"   时长: {info['duration']}秒")
-        
-        # 估算大小
-        est_size = downloader.get_video_size_estimate(url, cookie_file=None)
-        if est_size:
-            print(f"   预估大小: ~{est_size:.1f} MB")
-    
-    # Cookie 文件
+    # Cookie
     cookie_file = None
     if hasattr(config, 'COOKIE_FILE') and config.COOKIE_FILE:
         cookie_path = config.COOKIE_FILE
         if os.path.exists(cookie_path):
             cookie_file = cookie_path
-            print(f"[INFO] 使用 Cookie: {cookie_path}")
+    
+    # 获取视频信息
+    info = downloader.get_video_info(url, cookie_file=cookie_file)
+    if info:
+        print(f"   标题: {info['title']}")
+        print(f"   时长: {info['duration']}秒")
+        
+        # 估算大小
+        est_size = downloader.get_video_size_estimate(url, cookie_file=cookie_file)
+        if est_size:
+            print(f"   预估大小: ~{est_size:.1f} MB")
+    
+    # 选择清晰度
+    print("\n请选择视频清晰度:")
+    print("1. 🔥 1080P (高清)")
+    print("2. 📱 720P (流畅)")
+    print("3. ⭐ 默认 (最佳质量)")
+    
+    quality_choice = input("选择 (1/2/3，默认3): ").strip()
+    if quality_choice == "1":
+        quality = "1080p"
+    elif quality_choice == "2":
+        quality = "720p"
+    else:
+        quality = None
+    
+    if quality:
+        print(f"   已选择: {quality}")
+    
+    if cookie_file:
+        print(f"[INFO] 使用 Cookie: {cookie_file}")
     
     # 1. 下载
     print("\n[1/3] 下载视频...")
     filepath = downloader.download_video(
         url,
         config.DOWNLOAD_DIR,
-        cookie_file
+        cookie_file,
+        quality=quality
     )
     
     if not filepath:
