@@ -1,5 +1,6 @@
 """
 视频处理器 - 切片、去重、转码
+跨平台支持: Windows, macOS, Linux
 """
 import os
 import subprocess
@@ -7,27 +8,23 @@ import random
 import json
 import math
 from pathlib import Path
+import utils
 
 
 def get_ffmpeg_path():
-    """获取 FFmpeg 路径"""
+    """获取 FFmpeg 路径 - 跨平台"""
     # 优先使用 video-downloader 项目的 FFmpeg
-    bundled = r"D:\openclaw\workspace\video-downloader\bin\ffmpeg-7.1-essentials_build\bin\ffmpeg.exe"
-    if os.path.exists(bundled):
-        return bundled, bundled.replace('ffmpeg.exe', 'ffprobe.exe')
+    bundled = utils.get_ffmpeg_in_video_downloader()
+    if bundled:
+        ffprobe = bundled.replace('ffmpeg', 'ffprobe')
+        if utils.is_windows():
+            ffprobe = ffprobe.replace('ffmpeg', 'ffprobe.exe')
+        return bundled, ffprobe
     
-    # 检查系统 PATH
-    for prog in ['ffmpeg', 'ffmpeg.exe']:
-        try:
-            result = subprocess.run(
-                [prog, '-version'], 
-                capture_output=True, 
-                text=True
-            )
-            if result.returncode == 0:
-                return prog, prog.replace('ffmpeg', 'ffprobe')
-        except:
-            pass
+    # 使用 utils 自动检测
+    ffmpeg = utils.get_ffmpeg_path()
+    ffprobe = utils.get_ffprobe_path()
+    return ffmpeg, ffprobe
     
     return "ffmpeg", "ffprobe"
 

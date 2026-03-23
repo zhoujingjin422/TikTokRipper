@@ -1,14 +1,16 @@
 """
 自动字幕生成器 - 使用 Whisper 语音识别 (系统 Python 版本)
+跨平台支持: Windows, macOS, Linux
 """
 import os
 import subprocess
 import json
 import sys
+import utils
 
 
-# Python 路径 - 使用完整路径确保一致
-PYTHON_PATH = r"C:\Users\hjj\AppData\Local\Programs\Python\Python311\python.exe"
+# Python 路径 - 跨平台自动检测
+PYTHON_PATH = utils.get_python_path()
 
 
 def generate_subtitles(video_path, output_path=None, language=None):

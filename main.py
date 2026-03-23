@@ -1,11 +1,13 @@
 """
 TikTok Ripper - YouTube 视频搬运工具
 主程序入口
+跨平台支持: Windows, macOS, Linux
 """
 import os
 import sys
 import argparse
 import math
+import platform
 from pathlib import Path
 
 # 添加当前目录到路径
@@ -17,6 +19,7 @@ import auto_subtitle
 import ai_generator
 import config
 import youtube_kids
+import utils
 
 # 尝试导入翻译模块，如果失败则禁用翻译功能
 try:
@@ -30,11 +33,16 @@ except ImportError as e:
 
 def print_banner():
     """打印欢迎信息"""
-    banner = """
+    system = utils.get_system()
+    emoji = {"windows": "🪟", "darwin": "🍎", "linux": "🐧"}.get(system, "💻")
+    
+    banner = f"""
     ╔═══════════════════════════════════════╗
     ║       TikTok Ripper v1.0              ║
     ║   YouTube -> TikTok 搬运工具          ║
+    ║   跨平台: Windows / macOS / Linux    ║
     ╚═══════════════════════════════════════╝
+    {emoji} 当前系统: {platform.system()} {platform.release()}
     """
     print(banner)
 

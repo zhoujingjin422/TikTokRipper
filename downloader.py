@@ -1,35 +1,32 @@
 """
 YouTube 视频下载器 - 简化为只下载 1080P
+跨平台支持: Windows, macOS, Linux
 """
 import os
 import sys
 import subprocess
 import json
+import utils
 from config import YOUTUBE_PROXY, YOUTUBE_USE_EJS, YOUTUBE_JS_RUNTIME
 
 # 设置 UTF-8 输出
-if sys.platform == 'win32':
-    sys.stdout.reconfigure(encoding='utf-8')
-    sys.stderr.reconfigure(encoding='utf-8')
+if utils.is_windows():
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+        sys.stderr.reconfigure(encoding='utf-8')
+    except:
+        pass
 
 
 def get_ffmpeg_path():
-    """获取 FFmpeg 路径"""
+    """获取 FFmpeg 路径 - 使用 utils 跨平台检测"""
     # 优先使用 video-downloader 项目的 FFmpeg
-    bundled = r"D:\openclaw\workspace\video-downloader\bin\ffmpeg-7.1-essentials_build\bin\ffmpeg.exe"
-    if os.path.exists(bundled):
+    bundled = utils.get_ffmpeg_in_video_downloader()
+    if bundled:
         return bundled
     
-    # 检查系统 PATH
-    for prog in ['ffmpeg', 'ffmpeg.exe']:
-        try:
-            result = subprocess.run([prog, '-version'], capture_output=True, text=True)
-            if result.returncode == 0:
-                return prog
-        except:
-            pass
-    
-    return None
+    # 使用 utils 自动检测
+    return utils.get_ffmpeg_path()
 
 
 def get_video_info(url, cookie_file=None):

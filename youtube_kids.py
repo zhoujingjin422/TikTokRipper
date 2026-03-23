@@ -1,6 +1,7 @@
 """
 YouTube Kids 视频下载 + 字幕烧录工具
 整合自 youtubekids 项目
+跨平台支持: Windows, macOS, Linux
 """
 import os
 import sys
@@ -8,6 +9,7 @@ import subprocess
 import glob
 import re
 import shutil
+import utils
 
 # 尝试导入 yt_dlp
 try:
@@ -21,15 +23,14 @@ except ImportError:
 # 依赖检查
 # ─────────────────────────────────────────────
 
-FFMPEG_KNOWN_PATH = r"D:\openclaw\workspace\video-downloader\bin\ffmpeg-7.1-essentials_build\bin\ffmpeg.exe"
-
 def get_ffmpeg_path():
-    """获取 FFmpeg 路径"""
-    if shutil.which("ffmpeg"):
-        return shutil.which("ffmpeg")
-    if os.path.isfile(FFMPEG_KNOWN_PATH):
-        return FFMPEG_KNOWN_PATH
-    return "ffmpeg"  # 默认尝试系统 PATH
+    """获取 FFmpeg 路径 - 跨平台"""
+    # 优先使用 video-downloader 项目的 FFmpeg
+    bundled = utils.get_ffmpeg_in_video_downloader()
+    if bundled:
+        return bundled
+    # 使用 utils 自动检测
+    return utils.get_ffmpeg_path()
 
 
 def check_dependencies():
@@ -42,6 +43,10 @@ def check_dependencies():
     ffmpeg = get_ffmpeg_path()
     if not ffmpeg:
         errors.append("ffmpeg 未安装 → https://ffmpeg.org/download.html")
+    
+    # 显示系统信息
+    print(f"  系统: {utils.get_system()}")
+    print(f"  FFmpeg: {ffmpeg}")
     
     return errors
 
