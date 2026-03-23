@@ -16,6 +16,7 @@ import processor
 import auto_subtitle
 import ai_generator
 import config
+import youtube_kids
 
 # 尝试导入翻译模块，如果失败则禁用翻译功能
 try:
@@ -55,6 +56,7 @@ def menu():
         print("9. ⚙️  查看/修改配置")
         print("10. 📝 翻译字幕 (英译中 -> 中英双语)")
         print("11. 📥 下载 YouTube 字幕")
+        print("12. 🧒 YouTube Kids 下载 (儿童视频)")
         print("0. ❌ 退出")
         print("="*50)
         
@@ -82,6 +84,8 @@ def menu():
             translate_subtitle_menu()
         elif choice == "11":
             download_subtitle_only()
+        elif choice == "12":
+            download_youtube_kids()
         elif choice == "0":
             print("👋 再见!")
             break
@@ -795,6 +799,152 @@ def translate_subtitle_menu():
         
     except ValueError:
         print("❌ 无效选择")
+
+
+def download_youtube_kids():
+    """YouTube Kids 视频下载 - 支持字幕烧录"""
+    print("\n" + "="*50)
+    print("🧒 YouTube Kids 视频下载")
+    print("="*50)
+    
+    # 检查依赖
+    errors = youtube_kids.check_dependencies()
+    if errors:
+        print("\n❌ 依赖检查失败:")
+        for e in errors:
+            print(f"   - {e}")
+        print("\n请先安装依赖:")
+        print("   pip install yt-dlp")
+        print("   下载 ffmpeg: https://ffmpeg.org/download.html")
+        return
+    
+    # 输入 URL
+    print("\n支持: 单个视频、播放列表、频道 URL")
+    print("示例: https://www.youtube.com/@disneyjr")
+    url = input("\n输入 YouTube URL: ").strip()
+    
+    if not url:
+        print("❌ URL 不能为空")
+        return
+    
+    # 输出目录
+    output_dir = os.path.join(config.DOWNLOAD_DIR, "youtube_kids")
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # 选择认证方式
+    print("\n--- 认证方式 ---")
+    print("1. 🍪 使用 cookies.txt 文件")
+    print("2. 🌐 从浏览器读取 Cookie (Chrome)")
+    print("3. 🔓 跳过 (普通视频可能可以)")
+    
+    auth_choice = input("选择 (1/2/3): ").strip()
+    
+    cookies = None
+    cookies_from_browser = None
+    
+    if auth_choice == "1":
+        # 使用 cookies.txt
+        cookie_path = os.path.join(os.path.dirname(__file__), "cookies.txt")
+        if os.path.exists(cookie_path):
+            cookies = cookie_path
+            print(f"   ✅ 使用: {cookie_path}")
+        else:
+            custom_path = input("   输入 cookies.txt 路径: ").strip()
+            if os.path.exists(custom_path):
+                cookies = custom_path
+            else:
+                print("   ❌ 文件不存在，将尝试无认证下载")
+    
+    elif auth_choice == "2":
+        cookies_from_browser = "chrome"
+        print("   ✅ 将从 Chrome 读取 Cookie")
+    
+    else:
+        print("   ⚠️ 跳过认证")
+    
+    # 视频质量
+    print("\n--- 视频质量 ---")
+    print("1. 🔥 最佳画质")
+    print("2. 📺 1080p")
+    print("3. 📱 720p (推荐)")
+    print("4. 💾 480p")
+    
+    quality_choice = input("选择 (1/2/3/4): ").strip()
+    quality_map = {"1": "best", "2": "1080p", "3": "720p", "4": "480p"}
+    quality = quality_map.get(quality_choice, "720p")
+    
+    # 字幕语言
+    print("\n--- 字幕语言 ---")
+    print("1. 🇨🇳 中文优先 (简体→繁体→英文)")
+    print("2. 🇬🇧 英文")
+    print("3. 🇯🇵 日文")
+    
+    lang_choice = input("选择 (1/2/3): ").strip()
+    lang_map = {"1": "zh-Hans,zh-Hant,zh,en", "2": "en", "3": "ja"}
+    language = lang_map.get(lang_choice, "zh-Hans,zh-Hant,zh,en")
+    
+    # 是否烧录字幕
+    print("\n--- 字幕处理 ---")
+    print("1. 🔥 烧录字幕进视频 (推荐)")
+    print("2. 📄 仅下载字幕")
+    print("3. ⏭️ 跳过字幕")
+    
+    subtitle_choice = input("选择 (1/2/3): ").strip()
+    
+    burn_subtitle = subtitle_choice == "1"
+    bilingual = False
+    
+    if burn_subtitle:
+        bilingual_input = input("   是否翻译为中英双语? (y/n): ").strip().lower()
+        bilingual = bilingual_input == "y"
+        
+        # 字幕样式
+        print("\n   字幕样式:")
+        print("   1. 白色")
+        print("   2. 黄色 (清晰)")
+        print("   3. 青色")
+        style_choice = input("   选择颜色 (1/2/3): ").strip()
+        color_map = {"1": "white", "2": "yellow", "3": "cyan"}
+        font_color = color_map.get(style_choice, "white")
+        
+        print("\n   字幕大小:")
+        print("   1. 小 (20)")
+        print("   2. 中 (26) ⭐")
+        print("   3. 大 (32)")
+        size_choice = input("   选择大小 (1/2/3): ").strip()
+        size_map = {"1": "20", "2": "26", "3": "32"}
+        font_size = int(size_map.get(size_choice, "26"))
+    else:
+        font_color = "white"
+        font_size = 24
+    
+    # 开始下载
+    print("\n" + "="*50)
+    print("🚀 开始下载...")
+    print("="*50)
+    
+    result = youtube_kids.process_video(
+        url=url,
+        output_dir=output_dir,
+        language=language,
+        quality=quality,
+        cookies=cookies,
+        cookies_from_browser=cookies_from_browser,
+        burn_subtitle=burn_subtitle,
+        bilingual=bilingual,
+        font_size=font_size,
+        font_color=font_color,
+        position="bottom",
+    )
+    
+    if result:
+        print(f"\n✅ 下载完成!")
+        print(f"   输出目录: {output_dir}")
+    else:
+        print("\n❌ 下载失败，请检查:")
+        print("   - URL 是否正确")
+        print("   - Cookie 是否有效 (如需登录)")
+        print("   - 视频是否可访问")
 
 
 def main():

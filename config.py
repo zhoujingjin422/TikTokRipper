@@ -43,3 +43,8 @@ FFPROBE_PATH = "ffprobe"
 # 设置环境变量或直接填写 API Key
 OPENAI_API_KEY = "your-openai-api-key-here"  # OpenAI
 MINIMAX_API_KEY = "your-minimax-api-key-here"    # MiniMax
+
+## YouTube Kids 配置
+YOUTUBE_KIDS_QUALITY = "720p"          # 默认画质
+YOUTUBE_KIDS_LANGUAGE = "zh-Hans,zh-Hant,zh,en"  # 字幕语言
+YOUTUBE_KIDS_OUTPUT = "downloads/youtube_kids"  # 输出目录
