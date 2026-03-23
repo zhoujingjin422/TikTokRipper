@@ -2,6 +2,8 @@
 
 YouTube 视频搬运工具 - 下载、处理、一键发布到抖音
 
+**跨平台支持: Windows / macOS / Linux** 🍎🐧🪟
+
 ## 功能特点
 
 - 🔍 搜索 YouTube 视频
@@ -23,19 +25,43 @@ YouTube 视频搬运工具 - 下载、处理、一键发布到抖音
 
 ## 安装
 
+### 1. 安装 Python 依赖
+
 ```bash
-# 1. 安装 Python 依赖
 pip install yt-dlp
+```
 
-# 2. 安装 FFmpeg
-# Windows: 下载 ffmpeg.exe 并放到 PATH 中
-# Mac: brew install ffmpeg
-# Linux: sudo apt install ffmpeg
+### 2. 安装 FFmpeg
 
-# 3. 验证安装
+#### macOS (推荐)
+```bash
+# 使用 Homebrew
+brew install ffmpeg
+```
+
+#### Linux (Ubuntu/Debian)
+```bash
+sudo apt update
+sudo apt install ffmpeg
+```
+
+#### Windows
+- 方法一: 下载 https://ffmpeg.org/download.html
+- 方法二: `winget install ffmpeg`
+- 方法三: 将 ffmpeg.exe 放到项目目录或 PATH 中
+
+### 3. 验证安装
+
+```bash
 ffmpeg -version
 yt-dlp --version
 ```
+
+### 4. 代理配置 (可选)
+
+如果需要代理，在 `config.py` 中设置:
+- Windows 默认: `http://127.0.0.1:7897`
+- macOS/Linux 默认: `http://127.0.0.1:7890`
 
 ## 使用方法
 
