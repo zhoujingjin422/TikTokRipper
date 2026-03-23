@@ -864,8 +864,18 @@ def download_youtube_kids():
                 print("   ❌ 文件不存在，将尝试无认证下载")
     
     elif auth_choice == "2":
-        cookies_from_browser = "chrome"
-        print("   ✅ 将从 Chrome 读取 Cookie")
+        # 跨平台浏览器选择
+        supported = utils.get_browser_cookie_support()
+        print(f"\n   支持的浏览器: {', '.join(supported)}")
+        browser = input("   输入浏览器名称 (直接回车=chrome): ").strip().lower()
+        if not browser:
+            browser = "chrome"
+        if browser in supported:
+            cookies_from_browser = browser
+            print(f"   ✅ 将从 {browser} 读取 Cookie")
+        else:
+            print(f"   ❌ 不支持的浏览器，使用 Chrome")
+            cookies_from_browser = "chrome"
     
     else:
         print("   ⚠️ 跳过认证")
